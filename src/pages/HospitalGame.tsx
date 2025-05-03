@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,11 +9,11 @@ interface Patient {
   id: number;
   name: string;
   gender: 'male' | 'female' | 'baby';
-  type: 'normal' | 'albino';
+  type: 'normal' | 'albino' | 'zombie';
   symptoms: string[];
   treated: boolean;
   specialCase?: {
-    type: 'sleepy' | 'stuck' | 'trash';
+    type: 'sleepy' | 'stuck' | 'trash' | 'zombie';
     description: string;
   };
 }
@@ -29,11 +29,96 @@ interface Tool {
   id: number;
   name: string;
   description: string;
-  solves: ('sleepy' | 'stuck' | 'trash')[];
+  solves: ('sleepy' | 'stuck' | 'trash' | 'zombie')[];
 }
+
+// Имена для новых пациентов
+const patientNames = [
+  "Пушок", "Нюша", "Хрум", "Клёпа", "Зубастик", "Плюша", 
+  "Морковка", "Травка", "Кекс", "Куся", "Молли", "Орех", 
+  "Бантик", "Звёздочка", "Шуша", "Тёпа", "Лапка", "Пузырь"
+];
+
+// Генератор новых пациентов
+const generateNewPatient = (id: number): Patient => {
+  // Случайный выбор имени, пола и типа
+  const name = patientNames[Math.floor(Math.random() * patientNames.length)];
+  const genders: ('male' | 'female' | 'baby')[] = ['male', 'female', 'baby'];
+  const gender = genders[Math.floor(Math.random() * genders.length)];
+  
+  // Меньшая вероятность для зомби-капибар
+  const typeRandom = Math.random();
+  let type: 'normal' | 'albino' | 'zombie' = 'normal';
+  if (typeRandom > 0.85) {
+    type = 'zombie';
+  } else if (typeRandom > 0.7) {
+    type = 'albino';
+  }
+  
+  // Случайные симптомы
+  const allSymptoms = ["высокая температура", "головная боль", "боль в животе", 
+    "потеря аппетита", "кашель", "насморк", "сонливость", "слабость", 
+    "зелёная шерсть", "головокружение", "боль в горле"];
+  
+  const symptoms: string[] = [];
+  const symptomCount = Math.floor(Math.random() * 3) + 1; // 1-3 симптома
+  
+  for (let i = 0; i < symptomCount; i++) {
+    const randomSymptom = allSymptoms[Math.floor(Math.random() * allSymptoms.length)];
+    if (!symptoms.includes(randomSymptom)) {
+      symptoms.push(randomSymptom);
+    }
+  }
+  
+  if (type === 'zombie' && !symptoms.includes("зелёная шерсть")) {
+    symptoms.push("зелёная шерсть");
+  }
+  
+  // Генерация особого случая
+  const hasSpecialCase = Math.random() > 0.6;
+  let specialCase;
+  
+  if (hasSpecialCase) {
+    const specialCaseTypes: ('sleepy' | 'stuck' | 'trash')[] = ['sleepy', 'stuck', 'trash'];
+    const specialCaseType = specialCaseTypes[Math.floor(Math.random() * specialCaseTypes.length)];
+    
+    let description = '';
+    if (specialCaseType === 'sleepy') {
+      description = 'Не выспался, постоянно зевает';
+    } else if (specialCaseType === 'stuck') {
+      description = 'Застряла лампочка во рту';
+    } else if (specialCaseType === 'trash') {
+      description = 'На голове застрял мусорный бак';
+    }
+    
+    specialCase = {
+      type: specialCaseType,
+      description
+    };
+  }
+  
+  // Если зомби, добавляем специальный случай зомби
+  if (type === 'zombie') {
+    specialCase = {
+      type: 'zombie',
+      description: 'Заражён зомби-вирусом, шерсть зелёная'
+    };
+  }
+  
+  return {
+    id,
+    name,
+    gender,
+    type,
+    symptoms,
+    treated: false,
+    specialCase
+  };
+};
 
 const HospitalGame: React.FC = () => {
   const [roomIndex, setRoomIndex] = useState<number>(0);
+  const [patientIdCounter, setPatientIdCounter] = useState<number>(9); // Start after existing IDs
   const [patientsRooms, setPatientsRooms] = useState<Patient[][]>([
     // Первый кабинет
     [
@@ -127,7 +212,8 @@ const HospitalGame: React.FC = () => {
     { id: 1, name: "Капибацилин", treats: ["высокая температура", "головная боль"], addons: ["водяной цветок"] },
     { id: 2, name: "Животворин", treats: ["боль в животе", "потеря аппетита"], addons: ["ледяная каламанси"] },
     { id: 3, name: "Кашлетрон", treats: ["кашель", "насморк"], addons: ["мятная трава"] },
-    { id: 4, name: "Энерджайзер", treats: ["сонливость", "слабость"], addons: ["солнечный корень"] }
+    { id: 4, name: "Энерджайзер", treats: ["сонливость", "слабость"], addons: ["солнечный корень"] },
+    { id: 5, name: "Антизомбин", treats: ["зелёная шерсть"], addons: ["пурпурный корень"] }
   ]);
 
   const tools: Tool[] = [
@@ -148,6 +234,12 @@ const HospitalGame: React.FC = () => {
       name: "Подъёмник для мусора", 
       description: "Помогает снять мусорные баки с головы",
       solves: ['trash']
+    },
+    {
+      id: 4,
+      name: "Антизомби-пульверизатор",
+      description: "Нейтрализует вирус зомби и возвращает натуральный цвет шерсти",
+      solves: ['zombie']
     }
   ];
 
@@ -156,6 +248,52 @@ const HospitalGame: React.FC = () => {
   const [selectedAddon, setSelectedAddon] = useState<string | null>(null);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [doctorComment, setDoctorComment] = useState<string>("");
+
+  // Обновление пациентов - замена вылеченных на новых
+  useEffect(() => {
+    const checkAndReplacePatients = () => {
+      let needsUpdate = false;
+      
+      const updatedRooms = patientsRooms.map(room => {
+        // Подсчитаем вылеченных пациентов
+        const treatedCount = room.filter(p => p.treated).length;
+        
+        // Если все пациенты в комнате вылечены, генерируем новых
+        if (treatedCount === room.length && treatedCount > 0) {
+          needsUpdate = true;
+          return Array.from({ length: 4 }, (_, i) => {
+            const newId = patientIdCounter + i;
+            return generateNewPatient(newId);
+          });
+        }
+        
+        // Если вылечено больше половины, заменяем только их
+        if (treatedCount >= room.length / 2 && treatedCount > 0) {
+          needsUpdate = true;
+          return room.map(patient => {
+            if (patient.treated) {
+              const newId = patientIdCounter + room.indexOf(patient);
+              return generateNewPatient(newId);
+            }
+            return patient;
+          });
+        }
+        
+        return room;
+      });
+      
+      if (needsUpdate) {
+        setPatientsRooms(updatedRooms);
+        setPatientIdCounter(prev => prev + 8); // Увеличиваем счетчик ID
+        setDoctorComment("Доктор Йод: К нам прибыли новые пациенты, Каламанси!");
+      }
+    };
+    
+    // Проверяем каждые 5 секунд, нужно ли заменить пациентов
+    const interval = setInterval(checkAndReplacePatients, 5000);
+    
+    return () => clearInterval(interval);
+  }, [patientsRooms, patientIdCounter]);
 
   const getCurrentPatients = () => patientsRooms[roomIndex];
 
@@ -185,18 +323,30 @@ const HospitalGame: React.FC = () => {
     // Обработка специального случая
     if (selectedPatient.specialCase && selectedTool) {
       if (selectedTool.solves.includes(selectedPatient.specialCase.type)) {
-        updatePatient(selectedPatient.id, { treated: true, specialCase: undefined });
-        
-        let specialMessage = "";
-        if (selectedPatient.specialCase.type === 'sleepy') {
-          specialMessage = `Доктор Йод: Отлично! ${selectedPatient.name} проснулся благодаря бодрящему колокольчику!`;
-        } else if (selectedPatient.specialCase.type === 'stuck') {
-          specialMessage = `Доктор Йод: Молодец, Каламанси! Лампочка успешно извлечена изо рта ${selectedPatient.name}!`;
-        } else if (selectedPatient.specialCase.type === 'trash') {
-          specialMessage = `Доктор Йод: Превосходно! Мусорный бак снят с головы ${selectedPatient.name}!`;
+        // Особая обработка для зомби
+        if (selectedPatient.specialCase.type === 'zombie') {
+          updatePatient(selectedPatient.id, { 
+            treated: true, 
+            specialCase: undefined,
+            type: selectedPatient.type === 'zombie' ? 'normal' : selectedPatient.type,
+            symptoms: selectedPatient.symptoms.filter(s => s !== 'зелёная шерсть')
+          });
+          
+          setDoctorComment(`Доктор Йод: Отлично! ${selectedPatient.name} избавился от зомби-вируса благодаря пульверизатору!`);
+        } else {
+          updatePatient(selectedPatient.id, { treated: true, specialCase: undefined });
+          
+          let specialMessage = "";
+          if (selectedPatient.specialCase.type === 'sleepy') {
+            specialMessage = `Доктор Йод: Отлично! ${selectedPatient.name} проснулся благодаря бодрящему колокольчику!`;
+          } else if (selectedPatient.specialCase.type === 'stuck') {
+            specialMessage = `Доктор Йод: Молодец, Каламанси! Лампочка успешно извлечена изо рта ${selectedPatient.name}!`;
+          } else if (selectedPatient.specialCase.type === 'trash') {
+            specialMessage = `Доктор Йод: Превосходно! Мусорный бак снят с головы ${selectedPatient.name}!`;
+          }
+          
+          setDoctorComment(specialMessage);
         }
-        
-        setDoctorComment(specialMessage);
         
         // Сбрасываем выбор после лечения
         setTimeout(() => {
@@ -304,17 +454,21 @@ const HospitalGame: React.FC = () => {
                 key={patient.id}
                 className={`p-3 border rounded-lg cursor-pointer transition-all ${
                   selectedPatient?.id === patient.id ? 'ring-2 ring-purple-400 bg-purple-50' : 
-                  patient.treated ? 'bg-green-50 border-green-200' : 'hover:bg-gray-50'
+                  patient.treated ? 'bg-green-50 border-green-200' : 
+                  patient.type === 'zombie' ? 'bg-green-100 border-green-300' : 'hover:bg-gray-50'
                 }`}
                 onClick={() => !patient.treated && setSelectedPatient(patient)}
               >
                 <div className="flex items-center gap-2 mb-2">
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    patient.type === 'albino' ? 'bg-gray-100' : 'bg-amber-200'
+                    patient.type === 'albino' ? 'bg-gray-100' : 
+                    patient.type === 'zombie' ? 'bg-green-300' : 'bg-amber-200'
                   }`}>
-                    {patient.gender === 'male' && <span className="text-xl">🦫</span>}
-                    {patient.gender === 'female' && <span className="text-xl">🦫</span>}
-                    {patient.gender === 'baby' && <span className="text-xl">🦫</span>}
+                    {patient.type === 'zombie' ? (
+                      <span className="text-xl">🧟</span>
+                    ) : (
+                      <span className="text-xl">🦫</span>
+                    )}
                   </div>
                   <div>
                     <p className="font-medium">{patient.name}</p>
@@ -323,16 +477,20 @@ const HospitalGame: React.FC = () => {
                       {patient.gender === 'female' && 'Самка'} 
                       {patient.gender === 'baby' && 'Детёныш'}
                       {patient.type === 'albino' ? ' (Альбинос)' : ''}
+                      {patient.type === 'zombie' ? ' (Зомби)' : ''}
                     </p>
                   </div>
                 </div>
 
                 {patient.specialCase && (
                   <div className="mb-2">
-                    <p className="text-sm font-medium text-amber-600">
+                    <p className={`text-sm font-medium ${
+                      patient.specialCase.type === 'zombie' ? 'text-green-600' : 'text-amber-600'
+                    }`}>
                       {patient.specialCase.type === 'sleepy' && <Icon name="Moon" size={14} className="inline mr-1" />}
                       {patient.specialCase.type === 'stuck' && <Icon name="AlertTriangle" size={14} className="inline mr-1" />}
                       {patient.specialCase.type === 'trash' && <Icon name="Trash2" size={14} className="inline mr-1" />}
+                      {patient.specialCase.type === 'zombie' && '🧟 '}
                       {patient.specialCase.description}
                     </p>
                   </div>
@@ -343,7 +501,9 @@ const HospitalGame: React.FC = () => {
                     <p className="text-sm font-medium">Симптомы:</p>
                     <ul className="text-xs text-gray-600">
                       {patient.symptoms.map((symptom, idx) => (
-                        <li key={idx}>• {symptom}</li>
+                        <li key={idx} className={symptom === 'зелёная шерсть' ? 'text-green-600 font-medium' : ''}>
+                          • {symptom}
+                        </li>
                       ))}
                     </ul>
                   </div>
@@ -376,7 +536,9 @@ const HospitalGame: React.FC = () => {
                     <div 
                       key={medicine.id}
                       className={`p-3 border rounded-lg cursor-pointer ${
-                        selectedMedicine?.id === medicine.id ? 'ring-2 ring-blue-400 bg-blue-50' : 'hover:bg-gray-50'
+                        selectedMedicine?.id === medicine.id ? 'ring-2 ring-blue-400 bg-blue-50' : 
+                        medicine.name === "Антизомбин" && selectedPatient.type === 'zombie' ? 'ring-1 ring-green-500 bg-green-50' : 
+                        'hover:bg-gray-50'
                       }`}
                       onClick={() => {
                         setSelectedMedicine(medicine);
@@ -426,7 +588,9 @@ const HospitalGame: React.FC = () => {
                     <div 
                       key={tool.id}
                       className={`p-3 border rounded-lg cursor-pointer ${
-                        selectedTool?.id === tool.id ? 'ring-2 ring-blue-400 bg-blue-50' : 'hover:bg-gray-50'
+                        selectedTool?.id === tool.id ? 'ring-2 ring-blue-400 bg-blue-50' : 
+                        tool.name === "Антизомби-пульверизатор" && selectedPatient.type === 'zombie' ? 'ring-1 ring-green-500 bg-green-50' :
+                        'hover:bg-gray-50'
                       }`}
                       onClick={() => {
                         setSelectedTool(tool);
