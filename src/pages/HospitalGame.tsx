@@ -12,6 +12,10 @@ interface Patient {
   type: 'normal' | 'albino';
   symptoms: string[];
   treated: boolean;
+  specialCase?: {
+    type: 'sleepy' | 'stuck' | 'trash';
+    description: string;
+  };
 }
 
 interface Medicine {
@@ -21,40 +25,102 @@ interface Medicine {
   addons?: string[];
 }
 
+interface Tool {
+  id: number;
+  name: string;
+  description: string;
+  solves: ('sleepy' | 'stuck' | 'trash')[];
+}
+
 const HospitalGame: React.FC = () => {
-  const [patients, setPatients] = useState<Patient[]>([
-    { 
-      id: 1, 
-      name: "Пончик", 
-      gender: "male", 
-      type: "normal", 
-      symptoms: ["высокая температура", "головная боль"], 
-      treated: false 
-    },
-    { 
-      id: 2, 
-      name: "Милка", 
-      gender: "female", 
-      type: "normal", 
-      symptoms: ["боль в животе", "потеря аппетита"], 
-      treated: false 
-    },
-    { 
-      id: 3, 
-      name: "Малыш", 
-      gender: "baby", 
-      type: "normal", 
-      symptoms: ["кашель", "насморк"], 
-      treated: false 
-    },
-    { 
-      id: 4, 
-      name: "Снежок", 
-      gender: "male", 
-      type: "albino", 
-      symptoms: ["сонливость", "слабость"], 
-      treated: false 
-    }
+  const [roomIndex, setRoomIndex] = useState<number>(0);
+  const [patientsRooms, setPatientsRooms] = useState<Patient[][]>([
+    // Первый кабинет
+    [
+      { 
+        id: 1, 
+        name: "Пончик", 
+        gender: "male", 
+        type: "normal", 
+        symptoms: ["высокая температура", "головная боль"], 
+        treated: false 
+      },
+      { 
+        id: 2, 
+        name: "Милка", 
+        gender: "female", 
+        type: "normal", 
+        symptoms: ["боль в животе", "потеря аппетита"], 
+        treated: false 
+      },
+      { 
+        id: 3, 
+        name: "Малыш", 
+        gender: "baby", 
+        type: "normal", 
+        symptoms: ["кашель", "насморк"], 
+        treated: false 
+      },
+      { 
+        id: 4, 
+        name: "Снежок", 
+        gender: "male", 
+        type: "albino", 
+        symptoms: ["сонливость", "слабость"], 
+        treated: false 
+      }
+    ],
+    // Второй кабинет (с сонными пациентами и особыми случаями)
+    [
+      { 
+        id: 5, 
+        name: "Соня", 
+        gender: "female", 
+        type: "normal", 
+        symptoms: ["головная боль"], 
+        treated: false,
+        specialCase: {
+          type: 'sleepy',
+          description: 'Не выспалась, постоянно зевает'
+        }
+      },
+      { 
+        id: 6, 
+        name: "Бублик", 
+        gender: "male", 
+        type: "normal", 
+        symptoms: ["боль в горле"], 
+        treated: false,
+        specialCase: {
+          type: 'stuck',
+          description: 'Застряла лампочка во рту'
+        }
+      },
+      { 
+        id: 7, 
+        name: "Пушинка", 
+        gender: "female", 
+        type: "albino", 
+        symptoms: ["головокружение"], 
+        treated: false,
+        specialCase: {
+          type: 'trash',
+          description: 'На голове застрял мусорный бак'
+        }
+      },
+      { 
+        id: 8, 
+        name: "Сплюшка", 
+        gender: "baby", 
+        type: "normal", 
+        symptoms: [], 
+        treated: false,
+        specialCase: {
+          type: 'sleepy',
+          description: 'Не может проснуться'
+        }
+      }
+    ]
   ]);
 
   const [medicines, setMedicines] = useState<Medicine[]>([
@@ -64,47 +130,137 @@ const HospitalGame: React.FC = () => {
     { id: 4, name: "Энерджайзер", treats: ["сонливость", "слабость"], addons: ["солнечный корень"] }
   ]);
 
+  const tools: Tool[] = [
+    { 
+      id: 1, 
+      name: "Маленькая клешня", 
+      description: "Неметаллическая клешня для извлечения предметов",
+      solves: ['stuck']
+    },
+    { 
+      id: 2, 
+      name: "Бодрящий колокольчик", 
+      description: "Будит даже самых сонных капибар",
+      solves: ['sleepy']
+    },
+    { 
+      id: 3, 
+      name: "Подъёмник для мусора", 
+      description: "Помогает снять мусорные баки с головы",
+      solves: ['trash']
+    }
+  ];
+
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
   const [selectedAddon, setSelectedAddon] = useState<string | null>(null);
+  const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [doctorComment, setDoctorComment] = useState<string>("");
 
-  const treatPatient = () => {
-    if (!selectedPatient || !selectedMedicine) return;
+  const getCurrentPatients = () => patientsRooms[roomIndex];
 
-    const isCorrectMedicine = selectedPatient.symptoms.some(symptom => 
-      selectedMedicine.treats.includes(symptom)
+  const updatePatient = (patientId: number, updatedFields: Partial<Patient>) => {
+    setPatientsRooms(prevRooms => 
+      prevRooms.map((room, idx) => 
+        idx === roomIndex 
+          ? room.map(patient => 
+              patient.id === patientId 
+                ? { ...patient, ...updatedFields } 
+                : patient
+            )
+          : room
+      )
     );
+  };
 
-    let message = "";
-    if (isCorrectMedicine) {
-      setPatients(prevPatients => 
-        prevPatients.map(patient => 
-          patient.id === selectedPatient.id ? { ...patient, treated: true } : patient
-        )
+  const treatPatient = () => {
+    if (!selectedPatient) return;
+
+    // Если есть специальный случай, нужен инструмент
+    if (selectedPatient.specialCase && !selectedTool) {
+      setDoctorComment("Доктор Йод: Каламанси, этому пациенту нужен специальный инструмент!");
+      return;
+    }
+
+    // Обработка специального случая
+    if (selectedPatient.specialCase && selectedTool) {
+      if (selectedTool.solves.includes(selectedPatient.specialCase.type)) {
+        updatePatient(selectedPatient.id, { treated: true, specialCase: undefined });
+        
+        let specialMessage = "";
+        if (selectedPatient.specialCase.type === 'sleepy') {
+          specialMessage = `Доктор Йод: Отлично! ${selectedPatient.name} проснулся благодаря бодрящему колокольчику!`;
+        } else if (selectedPatient.specialCase.type === 'stuck') {
+          specialMessage = `Доктор Йод: Молодец, Каламанси! Лампочка успешно извлечена изо рта ${selectedPatient.name}!`;
+        } else if (selectedPatient.specialCase.type === 'trash') {
+          specialMessage = `Доктор Йод: Превосходно! Мусорный бак снят с головы ${selectedPatient.name}!`;
+        }
+        
+        setDoctorComment(specialMessage);
+        
+        // Сбрасываем выбор после лечения
+        setTimeout(() => {
+          setSelectedPatient(null);
+          setSelectedTool(null);
+        }, 2000);
+        
+        return;
+      } else {
+        setDoctorComment(`Доктор Йод: Хм, ${selectedTool.name} не поможет в этом случае...`);
+        return;
+      }
+    }
+
+    // Обычное лечение
+    if (selectedMedicine) {
+      const isCorrectMedicine = selectedPatient.symptoms.some(symptom => 
+        selectedMedicine.treats.includes(symptom)
       );
-      message = "Доктор Йод: Отличная работа, Каламанси! Пациент идёт на поправку.";
-    } else {
-      message = "Доктор Йод: Хмм, Каламанси, я думаю это не совсем подходящее лекарство. Попробуем другое?";
-    }
 
-    if (selectedAddon) {
-      message += ` Добавка "${selectedAddon}" была очень кстати!`;
-    }
+      let message = "";
+      if (isCorrectMedicine) {
+        updatePatient(selectedPatient.id, { treated: true });
+        message = `Доктор Йод: Отличная работа, Каламанси! ${selectedPatient.name} идёт на поправку.`;
+      } else {
+        message = `Доктор Йод: Хмм, Каламанси, я думаю это не совсем подходящее лекарство для ${selectedPatient.name}. Попробуем другое?`;
+      }
 
-    setDoctorComment(message);
-    
-    // Сбрасываем выбор после лечения
-    setTimeout(() => {
-      setSelectedPatient(null);
-      setSelectedMedicine(null);
-      setSelectedAddon(null);
-    }, 2000);
+      if (selectedAddon) {
+        message += ` Добавка "${selectedAddon}" была очень кстати!`;
+      }
+
+      setDoctorComment(message);
+      
+      // Сбрасываем выбор после лечения
+      setTimeout(() => {
+        setSelectedPatient(null);
+        setSelectedMedicine(null);
+        setSelectedAddon(null);
+      }, 2000);
+    }
+  };
+
+  const nextRoom = () => {
+    setRoomIndex((prevIndex) => (prevIndex + 1) % patientsRooms.length);
+    setSelectedPatient(null);
+    setSelectedMedicine(null);
+    setSelectedAddon(null);
+    setSelectedTool(null);
+    setDoctorComment("");
   };
 
   return (
     <div className="container mx-auto py-6 max-w-5xl">
-      <h1 className="text-3xl font-bold text-center mb-6">Больница Капибар</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold">Больница Капибар</h1>
+        <div className="flex items-center gap-2">
+          <span className="text-gray-600">Кабинет {roomIndex + 1}</span>
+          <Button onClick={nextRoom}>
+            <Icon name="ArrowRight" size={16} className="mr-2" />
+            Следующий кабинет
+          </Button>
+        </div>
+      </div>
       
       <div className="flex gap-4 mb-6">
         <Card className="w-1/2 p-4 bg-purple-50">
@@ -143,7 +299,7 @@ const HospitalGame: React.FC = () => {
         <Card className="p-4">
           <h2 className="text-xl font-semibold mb-4">Пациенты</h2>
           <div className="grid grid-cols-2 gap-4">
-            {patients.map(patient => (
+            {getCurrentPatients().map(patient => (
               <div 
                 key={patient.id}
                 className={`p-3 border rounded-lg cursor-pointer transition-all ${
@@ -170,14 +326,29 @@ const HospitalGame: React.FC = () => {
                     </p>
                   </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium">Симптомы:</p>
-                  <ul className="text-xs text-gray-600">
-                    {patient.symptoms.map((symptom, idx) => (
-                      <li key={idx}>• {symptom}</li>
-                    ))}
-                  </ul>
-                </div>
+
+                {patient.specialCase && (
+                  <div className="mb-2">
+                    <p className="text-sm font-medium text-amber-600">
+                      {patient.specialCase.type === 'sleepy' && <Icon name="Moon" size={14} className="inline mr-1" />}
+                      {patient.specialCase.type === 'stuck' && <Icon name="AlertTriangle" size={14} className="inline mr-1" />}
+                      {patient.specialCase.type === 'trash' && <Icon name="Trash2" size={14} className="inline mr-1" />}
+                      {patient.specialCase.description}
+                    </p>
+                  </div>
+                )}
+
+                {patient.symptoms.length > 0 && (
+                  <div>
+                    <p className="text-sm font-medium">Симптомы:</p>
+                    <ul className="text-xs text-gray-600">
+                      {patient.symptoms.map((symptom, idx) => (
+                        <li key={idx}>• {symptom}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                
                 {patient.treated && (
                   <div className="mt-2 text-green-600 text-sm font-medium">
                     <Icon name="CheckCircle" size={16} className="inline mr-1" />
@@ -192,10 +363,11 @@ const HospitalGame: React.FC = () => {
         <Card className="p-4">
           <h2 className="text-xl font-semibold mb-4">Лечение</h2>
           {selectedPatient ? (
-            <Tabs defaultValue="medicines">
+            <Tabs defaultValue={selectedPatient.specialCase ? "tools" : "medicines"}>
               <TabsList className="w-full mb-4">
                 <TabsTrigger value="medicines" className="flex-1">Лекарства</TabsTrigger>
                 <TabsTrigger value="addons" className="flex-1">Добавки</TabsTrigger>
+                <TabsTrigger value="tools" className="flex-1">Инструменты</TabsTrigger>
               </TabsList>
               
               <TabsContent value="medicines">
@@ -206,12 +378,23 @@ const HospitalGame: React.FC = () => {
                       className={`p-3 border rounded-lg cursor-pointer ${
                         selectedMedicine?.id === medicine.id ? 'ring-2 ring-blue-400 bg-blue-50' : 'hover:bg-gray-50'
                       }`}
-                      onClick={() => setSelectedMedicine(medicine)}
+                      onClick={() => {
+                        setSelectedMedicine(medicine);
+                        setSelectedTool(null);
+                      }}
                     >
                       <p className="font-medium">{medicine.name}</p>
                       <p className="text-xs text-gray-600 mt-1">Лечит: {medicine.treats.join(', ')}</p>
                     </div>
                   ))}
+                  {selectedPatient.specialCase && (
+                    <div className="col-span-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-sm text-amber-700">
+                        <Icon name="AlertCircle" size={16} className="inline mr-1" />
+                        У пациента особый случай. Возможно, потребуется специальный инструмент.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </TabsContent>
               
@@ -237,14 +420,40 @@ const HospitalGame: React.FC = () => {
                 </div>
               </TabsContent>
 
+              <TabsContent value="tools">
+                <div className="grid grid-cols-2 gap-3">
+                  {tools.map(tool => (
+                    <div 
+                      key={tool.id}
+                      className={`p-3 border rounded-lg cursor-pointer ${
+                        selectedTool?.id === tool.id ? 'ring-2 ring-blue-400 bg-blue-50' : 'hover:bg-gray-50'
+                      }`}
+                      onClick={() => {
+                        setSelectedTool(tool);
+                        setSelectedMedicine(null);
+                        setSelectedAddon(null);
+                      }}
+                    >
+                      <p className="font-medium">{tool.name}</p>
+                      <p className="text-xs text-gray-600 mt-1">{tool.description}</p>
+                    </div>
+                  ))}
+                  {!selectedPatient.specialCase && (
+                    <p className="text-gray-500 italic col-span-2 p-3">
+                      У этого пациента нет особых случаев, требующих инструментов
+                    </p>
+                  )}
+                </div>
+              </TabsContent>
+
               <div className="mt-6">
                 <Button 
                   className="w-full" 
                   size="lg"
-                  disabled={!selectedMedicine || selectedPatient.treated}
+                  disabled={(!selectedMedicine && !selectedTool) || selectedPatient.treated}
                   onClick={treatPatient}
                 >
-                  Применить лечение
+                  {selectedTool ? "Использовать инструмент" : "Применить лечение"}
                 </Button>
               </div>
             </Tabs>
